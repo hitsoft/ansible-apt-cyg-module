@@ -60,28 +60,30 @@ def main():
         current_version = installed_version(module, apt_cyg_path, name)
         latest = latest_version(module, apt_cyg_path, name)
 
+        vermsg = "current: %s / latest: %s" % (current_version, latest)
+
         if state == 'anything' and current_version != None:
-            module.exit_json(changed=False)
+            module.exit_json(changed=False, msg=vermsg)
             return
 
         if current_version == None or latest != current_version:
             if check_mode:
-                module.exit_json(changed=True)
+                module.exit_json(changed=True, msg=vermsg)
                 return
         else:
-            module.exit_json(changed=False)
+            module.exit_json(changed=False, msg=vermsg)
             return
 
         module.run_command('%s remove %s' % (apt_cyg_path, name), check_rc=True)
         module.run_command('%s install %s' % (apt_cyg_path, name), check_rc=True)
-        module.exit_json(changed=True, msg='%s %s' % (current_version, latest))
+        module.exit_json(changed=True, msg=vermsg)
 
     except Exception as e:
         module.fail_json(msg=str(e))
 
 def installed_version(module, apt_cyg_path, name):
-    (rc, out, err) = module.run_command("awk '$1~pkg && $0=$2' pkg=^%s$ /etc/setup/installed.db" % (name))
-    r = re.compile(r"%s-([0-9-.]+)\..*" % (re.escape(name)))
+    (rc, out, err) = module.run_command("awk '$1~pkg && $0=$2' pkg='^%s$' /etc/setup/installed.db" % (re.escape(name).replace('\\', '\\\\')))
+    r = re.compile(r"%s-(.*)\.tar\..*" % (re.escape(name)))
     version = r.search(out)
     installed_version = None
     if version != None:
@@ -91,7 +93,7 @@ def installed_version(module, apt_cyg_path, name):
 
 def latest_version(module, apt_cyg_path, name):
     (rc, out, err) = module.run_command('%s show %s' % (apt_cyg_path, name))
-    r = re.compile(r"version: ([0-9\.-]+)")
+    r = re.compile(r"^version: (.*)$", re.MULTILINE)
     version = r.search(out.strip())
     latest_version = None
     if version != None:
